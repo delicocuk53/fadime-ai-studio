@@ -1,0 +1,63 @@
+name: Fadime ESP32-S3 Firmware (Test)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: espressif/idf:v6.1
+    steps:
+      - name: Fetch official Xiaozhi source
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/78/xiaozhi-esp32.git xiaozhi
+      - name: Configure Fadime 240x240 7-pin screen
+        shell: bash
+        working-directory: xiaozhi
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("main/boards/bread-compact-wifi-lcd/config.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+          assert data["type"] == "bread-compact-wifi-lcd"
+          assert data["target"] == "esp32s3"
+          variant = next(v for v in data["builds"] if v["name"] == "bread-compact-wifi-lcd")
+          variant["sdkconfig_append"] = ["CONFIG_LCD_ST7789_240X240_7PIN=y"]
+          p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          print(p.read_text())
+          header = Path("main/boards/bread-compact-wifi-lcd/config.h").read_text()
+          for setting in (
+              "#define DISPLAY_CLK_PIN       GPIO_NUM_21",
+              "#define DISPLAY_MOSI_PIN      GPIO_NUM_47",
+              "#define DISPLAY_RST_PIN       GPIO_NUM_45",
+              "#define DISPLAY_DC_PIN        GPIO_NUM_40",
+              "#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_42",
+              "CONFIG_LCD_ST7789_240X240_7PIN",
+          ):
+              assert setting in header, f"Missing expected setting: {setting}"
+          print("Fadime GPIO/display profile verified")
+          PY
+      - name: Compile firmware (ESP-IDF)
+        shell: bash
+        working-directory: xiaozhi
+        run: |
+          source "$IDF_PATH/export.sh"
+          python scripts/build.py bread-compact-wifi-lcd --name bread-compact-wifi-lcd --language tr-TR --wake-word disabled
+      - name: Verify firmware
+        shell: bash
+        run: |
+          test -s xiaozhi/build/merged-binary.bin
+          sha256sum xiaozhi/build/merged-binary.bin
+      - name: Save TEST firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fadime-esp32s3-test-firmware
+          path: xiaozhi/build/merged-binary.bin
+          if-no-files-found: error
