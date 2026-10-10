@@ -44,6 +44,27 @@ jobs:
               assert setting in header, f"Missing expected setting: {setting}"
           print("Fadime GPIO/display profile verified")
           PY
+      - name: Add optional Fadime heartbeat client to board
+        shell: bash
+        run: |
+          cp firmware/fadime_heartbeat.inc xiaozhi/main/boards/bread-compact-wifi-lcd/fadime_heartbeat.inc
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("xiaozhi/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc")
+          src = p.read_text(encoding="utf-8")
+          assert "DECLARE_BOARD(CompactWifiBoardLCD);" in src
+          assert "InitializeTools();" in src
+          src = src.replace(
+              "DECLARE_BOARD(CompactWifiBoardLCD);",
+              '#include "fadime_heartbeat.inc"\\nDECLARE_BOARD(CompactWifiBoardLCD);'
+          )
+          # Forward declaration needed because method is used in constructor.
+          src = src.replace('#define TAG "CompactWifiBoardLCD"',
+                            'static void FadimeStartHeartbeat();\\n#define TAG "CompactWifiBoardLCD"')
+          src = src.replace("        InitializeTools();",
+                            "        InitializeTools();\\n        FadimeStartHeartbeat();")
+          p.write_text(src.replace("\\\\n", "\\n"), encoding="utf-8")
+          PY
       - name: Compile firmware (ESP-IDF)
         shell: bash
         working-directory: xiaozhi
