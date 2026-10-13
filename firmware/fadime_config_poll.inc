@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 #include <string>
 #include <cstring>
+#include "display/lvgl_display/lvgl_theme.h"
 
 static bool FadimeConfigCredentials(std::string& id, std::string& token) {
     nvs_handle_t h;
@@ -78,15 +79,37 @@ static void FadimeConfigTask(void*) {
                     if (cJSON_IsNumber(number) && number->valuedouble >= 1 &&
                         number->valuedouble <= 2147483647 && cJSON_IsObject(settings)) {
                         bool applied = false;
-                        // Only a single validated brightness field is currently supported.
+                        const cJSON* screen = cJSON_GetObjectItemCaseSensitive(settings, "screen");
                         const cJSON* brightness = cJSON_GetObjectItemCaseSensitive(settings, "brightness");
                         if (cJSON_GetArraySize(settings) == 1 && cJSON_IsNumber(brightness) &&
                             brightness->valuedouble >= 0 && brightness->valuedouble <= 100 &&
                             brightness->valuedouble == brightness->valueint) {
-                            Backlight* backlight = Board::GetInstance().GetBacklight();
-                            if (backlight) {
-                                backlight->SetBrightness(static_cast<uint8_t>(brightness->valueint));
-                                applied = true;
+                            Backlight* b = Board::GetInstance().GetBacklight();
+                            if (b) { b->SetBrightness(static_cast<uint8_t>(brightness->valueint)); applied = true; }
+                        } else if (cJSON_GetArraySize(settings) == 1 && cJSON_IsObject(screen) &&
+                                   cJSON_GetArraySize(screen) == 4) {
+                            const cJSON* theme = cJSON_GetObjectItemCaseSensitive(screen,"theme");
+                            const cJSON* emotion = cJSON_GetObjectItemCaseSensitive(screen,"emotion");
+                            const cJSON* message = cJSON_GetObjectItemCaseSensitive(screen,"message");
+                            const cJSON* level = cJSON_GetObjectItemCaseSensitive(screen,"brightness");
+                            if (cJSON_IsString(theme) && cJSON_IsString(emotion) &&
+                                cJSON_IsString(message) && cJSON_IsNumber(level) &&
+                                level->valuedouble >= 1 && level->valuedouble <= 100 &&
+                                level->valuedouble == level->valueint &&
+                                strlen(message->valuestring) <= 72 &&
+                                (strcmp(theme->valuestring,"light")==0 || strcmp(theme->valuestring,"dark")==0) &&
+                                (strcmp(emotion->valuestring,"happy")==0 || strcmp(emotion->valuestring,"neutral")==0 ||
+                                 strcmp(emotion->valuestring,"thinking")==0 || strcmp(emotion->valuestring,"surprised")==0)) {
+                                auto* display = Board::GetInstance().GetDisplay();
+                                auto* backlight = Board::GetInstance().GetBacklight();
+                                auto* t = LvglThemeManager::GetInstance().GetTheme(theme->valuestring);
+                                if (display && backlight && t) {
+                                    display->SetTheme(t);
+                                    display->SetEmotion(emotion->valuestring);
+                                    display->SetChatMessage("assistant",message->valuestring);
+                                    backlight->SetBrightness(static_cast<uint8_t>(level->valueint));
+                                    applied = true;
+                                }
                             }
                         }
                         char body[100];
