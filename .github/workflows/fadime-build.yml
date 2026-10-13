@@ -71,6 +71,24 @@ jobs:
           assert key in cm_src
           cm.write_text(cm_src.replace(key, "                    PRIV_REQUIRES" + chr(10) + "                        esp_http_client" + chr(10) + "                        esp-tls", 1), encoding="utf-8")
           PY
+      - name: Add Fadime configuration polling client
+        shell: bash
+        run: |
+          cp firmware/fadime_config_poll.inc xiaozhi/main/boards/bread-compact-wifi-lcd/fadime_config_poll.inc
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("xiaozhi/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc")
+          s = p.read_text(encoding="utf-8")
+          assert "        FadimeStartUsbPairing();" in s
+          assert "DECLARE_BOARD(CompactWifiBoardLCD);" in s
+          s = s.replace('#define TAG "CompactWifiBoardLCD"',
+                        'static void FadimeStartConfigPolling();' + chr(10) + '#define TAG "CompactWifiBoardLCD"')
+          s = s.replace("        FadimeStartUsbPairing();",
+                        "        FadimeStartUsbPairing();" + chr(10) + "        FadimeStartConfigPolling();")
+          s = s.replace("DECLARE_BOARD(CompactWifiBoardLCD);",
+                        '#include "fadime_config_poll.inc"' + chr(10) + "DECLARE_BOARD(CompactWifiBoardLCD);")
+          p.write_text(s, encoding="utf-8")
+          PY
       - name: Compile firmware (ESP-IDF)
         shell: bash
         working-directory: xiaozhi
