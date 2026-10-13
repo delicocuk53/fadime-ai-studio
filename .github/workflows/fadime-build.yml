@@ -71,6 +71,24 @@ jobs:
           assert key in cm_src
           cm.write_text(cm_src.replace(key, "                    PRIV_REQUIRES" + chr(10) + "                        esp_http_client" + chr(10) + "                        esp-tls", 1), encoding="utf-8")
           PY
+      - name: Add Fadime USB serial pairing listener
+        shell: bash
+        run: |
+          cp firmware/fadime_usb_pair.inc xiaozhi/main/boards/bread-compact-wifi-lcd/fadime_usb_pair.inc
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("xiaozhi/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc")
+          src = p.read_text(encoding="utf-8")
+          assert "        FadimeStartHeartbeat();" in src
+          assert "DECLARE_BOARD(CompactWifiBoardLCD);" in src
+          src = src.replace('#define TAG "CompactWifiBoardLCD"',
+                            'static void FadimeStartUsbPairing();' + chr(10) + '#define TAG "CompactWifiBoardLCD"')
+          src = src.replace("        FadimeStartHeartbeat();",
+                            "        FadimeStartHeartbeat();" + chr(10) + "        FadimeStartUsbPairing();")
+          src = src.replace("DECLARE_BOARD(CompactWifiBoardLCD);",
+                            '#include "fadime_usb_pair.inc"' + chr(10) + "DECLARE_BOARD(CompactWifiBoardLCD);")
+          p.write_text(src, encoding="utf-8")
+          PY
       - name: Compile firmware (ESP-IDF)
         shell: bash
         working-directory: xiaozhi
