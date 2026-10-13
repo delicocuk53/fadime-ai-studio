@@ -10,7 +10,7 @@
 #include <freertos/task.h>
 #include <string>
 #include <cstring>
-#include "display/lvgl_theme.h"
+#include "display/lvgl_display/lvgl_theme.h"
 
 static bool FadimeConfigCredentials(std::string& id, std::string& token) {
     nvs_handle_t h;
