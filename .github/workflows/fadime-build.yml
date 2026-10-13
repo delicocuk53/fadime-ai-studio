@@ -2,6 +2,8 @@ name: Fadime ESP32-S3 Firmware (Test)
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,6 +15,8 @@ jobs:
     container:
       image: espressif/idf:v6.1
     steps:
+      - name: Checkout Fadime integration files
+        uses: actions/checkout@v4
       - name: Fetch official Xiaozhi source
         shell: bash
         run: |
@@ -53,17 +57,19 @@ jobs:
           p = Path("xiaozhi/main/boards/bread-compact-wifi-lcd/compact_wifi_board_lcd.cc")
           src = p.read_text(encoding="utf-8")
           assert "DECLARE_BOARD(CompactWifiBoardLCD);" in src
-          assert "InitializeTools();" in src
-          src = src.replace(
-              "DECLARE_BOARD(CompactWifiBoardLCD);",
-              '#include "fadime_heartbeat.inc"\\nDECLARE_BOARD(CompactWifiBoardLCD);'
-          )
-          # Forward declaration needed because method is used in constructor.
+          assert "        InitializeTools();" in src
           src = src.replace('#define TAG "CompactWifiBoardLCD"',
-                            'static void FadimeStartHeartbeat();\\n#define TAG "CompactWifiBoardLCD"')
+                            'static void FadimeStartHeartbeat();' + chr(10) + '#define TAG "CompactWifiBoardLCD"')
           src = src.replace("        InitializeTools();",
-                            "        InitializeTools();\\n        FadimeStartHeartbeat();")
-          p.write_text(src.replace("\\\\n", "\\n"), encoding="utf-8")
+                            "        InitializeTools();" + chr(10) + "        FadimeStartHeartbeat();")
+          src = src.replace("DECLARE_BOARD(CompactWifiBoardLCD);",
+                            '#include "fadime_heartbeat.inc"' + chr(10) + "DECLARE_BOARD(CompactWifiBoardLCD);")
+          p.write_text(src, encoding="utf-8")
+          cm = Path("xiaozhi/main/CMakeLists.txt")
+          cm_src = cm.read_text(encoding="utf-8")
+          key = "                    PRIV_REQUIRES"
+          assert key in cm_src
+          cm.write_text(cm_src.replace(key, "                    PRIV_REQUIRES" + chr(10) + "                        esp_http_client" + chr(10) + "                        esp-tls", 1), encoding="utf-8")
           PY
       - name: Compile firmware (ESP-IDF)
         shell: bash
